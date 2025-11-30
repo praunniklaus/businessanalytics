@@ -4,12 +4,6 @@ import numpy as np
 def engineer_features():
     data = pd.read_csv('data/preprocessed.csv')
     
-    # Price per person (value metric)
-    data['price_per_person'] = data['price'] / data['accommodates'].replace(0, 1)
-    
-    # Price per bedroom (avoid division by zero)
-    data['price_per_bedroom'] = data['price'] / data['bedrooms'].replace(0, 1)
-    
     # Bedroom density (space per person)
     data['bedroom_density'] = data['bedrooms'] / data['accommodates'].replace(0, 1)
     
@@ -42,11 +36,9 @@ def engineer_features():
     
     data.to_csv('data/data.csv', index=False)
     print(f"Feature engineering complete. Output saved to data/data.csv")
-    print(f"Added {len(['price_per_person', 'price_per_bedroom', 'bedroom_density', 
-                        'beds_per_person', 'bathrooms_per_person', 'total_rooms',
-                        'host_experience_years', 'avg_dist_to_landmark',
-                        'review_score_std', 'min_dist_to_landmark', 
-                        'total_amenities'])} new features.")
+    print(f"Added {len(['bedroom_density', 'beds_per_person', 'bathrooms_per_person', 
+                        'total_rooms', 'avg_dist_to_landmark', 'review_score_std', 
+                        'min_dist_to_landmark', 'total_amenities'])} new features.")
 
 if __name__ == '__main__':
     engineer_features()
