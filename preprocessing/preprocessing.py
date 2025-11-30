@@ -121,12 +121,18 @@ def preprocess():
     data['bathrooms'] = data['bathrooms_text'].apply(lambda x: float(re.findall(r'\d+\.?\d*', str(x))[0]) if pd.notna(x) and re.findall(r'\d+\.?\d*', str(x)) else np.nan)
     data = data.drop(columns=['bathrooms_text'])
 
-    # Convert property_type to binary columns
-    property_types = data['property_type'].unique()
-    for property_type in property_types:
+    # Convert property_type to binary columns (keep only top N most common, group rest as "Other")
+    top_n_property_types = 15
+    property_type_counts = data['property_type'].value_counts()
+    top_property_types = property_type_counts.head(top_n_property_types).index.tolist()
+    
+    for property_type in top_property_types:
         if pd.notna(property_type):
             col_name = 'property_' + property_type.lower().replace(' ', '_').replace('-', '_').replace('/', '_').replace('ö', 'oe').replace('ä', 'ae').replace('ü', 'ue')
             data[col_name] = (data['property_type'] == property_type).astype(int)
+    
+    # Group all other property types into "Other"
+    data['property_other'] = (~data['property_type'].isin(top_property_types)).astype(int)
     data = data.drop(columns=['property_type'])
 
     # Impute missing values in numeric columns with median
