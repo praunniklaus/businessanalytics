@@ -34,7 +34,7 @@ def preprocess():
 
     # Columns to Keep
     keep_cols = [
-    'host_since', 'host_total_listings_count', 'price', 'accommodates', 'bedrooms', 'beds', 'room_type', 
+    'id', 'host_since', 'host_total_listings_count', 'price', 'accommodates', 'bedrooms', 'beds', 'room_type', 
     'neighbourhood_group_cleansed', 'latitude', 'longitude', 'amenities', 'bathrooms_text', 
     'review_scores_rating', 'property_type','number_of_reviews',
     'review_scores_accuracy', 'review_scores_cleanliness', 'review_scores_checkin',

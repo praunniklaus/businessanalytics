@@ -26,7 +26,7 @@ def train_gradient_boosting():
     print(f"Dataset shape: {data.shape}")
     print(f"Features: {data.shape[1] - 1}")
     
-    X = data.drop('price', axis=1)
+    X = data.drop(['price', 'id'], axis=1)
     y = data['price']
     
     print("\nSplitting data into train/test (80/20) with random_state=10...")

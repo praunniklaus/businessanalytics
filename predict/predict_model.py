@@ -14,7 +14,7 @@ def predict_model(model_path, X_test=None, y_test=None):
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_path = os.path.join(project_root, 'data', 'data.csv')
         data = pd.read_csv(data_path)
-        X = data.drop('price', axis=1)
+        X = data.drop(['price', 'id'], axis=1)
         y = data['price']
         
         _, X_test, _, y_test = train_test_split(
