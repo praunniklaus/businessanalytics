@@ -5,3 +5,6 @@ joblib
 xgboost
 lightgbm
 catboost
+fastapi
+uvicorn
+folium

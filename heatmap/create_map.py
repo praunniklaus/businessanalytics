@@ -5,7 +5,7 @@ import os
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-def create_property_map():
+def create_property_map(blue_marker=None, return_html=False):
     data_path = os.path.join(project_root, 'data', 'data.csv')
     raw_data_path = os.path.join(project_root, 'data', 'raw_data.csv')
     
@@ -64,6 +64,25 @@ def create_property_map():
                 tooltip=folium.Tooltip(tooltip_text)
             ).add_to(m)
     
+    if blue_marker:
+        lat, lng, price = blue_marker['lat'], blue_marker['lng'], blue_marker.get('price', 'N/A')
+        tooltip_text = f"""
+        <b>YOUR PROPERTY</b><br>
+        <b>Predicted Price:</b> ${price}<br>
+        <b>Location:</b> {lat:.4f}, {lng:.4f}
+        """
+        folium.CircleMarker(
+            location=[lat, lng],
+            radius=10,
+            color='blue',
+            fill=True,
+            fill_color='blue',
+            fill_opacity=0.9,
+            tooltip=folium.Tooltip(tooltip_text)
+        ).add_to(m)
+        m.location = [lat, lng]
+        m.zoom_start = 14
+    
     legend_html = '''
     <div style="position: fixed; bottom: 50px; left: 50px; z-index: 1000; 
                 background-color: white; padding: 10px; border-radius: 5px;
@@ -71,10 +90,14 @@ def create_property_map():
         <b>Price Category</b><br>
         <i style="background: red; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> Bottom 33% (Low)<br>
         <i style="background: orange; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> Middle 33%<br>
-        <i style="background: green; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> Top 33% (High)
+        <i style="background: green; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> Top 33% (High)<br>
+        <i style="background: blue; width: 12px; height: 12px; display: inline-block; border-radius: 50%;"></i> Your Property
     </div>
     '''
     m.get_root().html.add_child(folium.Element(legend_html))
+    
+    if return_html:
+        return m._repr_html_()
     
     output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'property_map.html')
     m.save(output_path)
