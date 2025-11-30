@@ -25,12 +25,12 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     distance = R * c
     return distance
 
-    
+
 # Preprocessing Function
 def preprocess():
 
     # Load Raw Data
-    data_raw = pd.read_csv('data/listings.csv')
+    data_raw = pd.read_csv('data/raw_data.csv')
 
     # Columns to Keep
     keep_cols = [
@@ -143,5 +143,5 @@ def preprocess():
 
 if __name__ == '__main__':
     data = preprocess()
-    data.to_csv('data/data.csv', index=False)
+    data.to_csv('data/preprocessed.csv', index=False)
     
