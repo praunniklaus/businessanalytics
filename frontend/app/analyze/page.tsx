@@ -74,12 +74,50 @@ export default function AnalyzePage() {
   const [amenityModalOpen, setAmenityModalOpen] = useState(false);
   const [mapUrl, setMapUrl] = useState(`${API_URL}/map`);
 
+  // New state for location mode
+  const [locationMode, setLocationMode] = useState<'coordinates' | 'address'>('coordinates');
+  const [address, setAddress] = useState("");
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
+
+  const [mapFilters, setMapFilters] = useState({
+    neighbourhood: false,
+    bedrooms: false,
+    beds: false,
+    accommodates: false,
+  });
+
   useEffect(() => {
     fetch(`${API_URL}/options`)
       .then((res) => res.json())
       .then((data) => setOptions(data))
       .catch((err) => console.error("Failed to load options:", err));
   }, []);
+
+  // Update map URL when filters or prediction data changes
+  useEffect(() => {
+    if (!prediction) {
+      // Initial map without prediction
+      setMapUrl(`${API_URL}/map`);
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.append('lat', formData.latitude.toString());
+    params.append('lng', formData.longitude.toString());
+    params.append('price', prediction.toString());
+
+    if (mapFilters.neighbourhood) params.append('neighbourhood', formData.neighbourhood);
+    if (mapFilters.bedrooms) params.append('bedrooms', formData.bedrooms.toString());
+    if (mapFilters.beds) params.append('beds', formData.beds.toString());
+    if (mapFilters.accommodates) params.append('accommodates', formData.accommodates.toString());
+
+    setMapUrl(`${API_URL}/map?${params.toString()}`);
+  }, [prediction, mapFilters, formData]);
+
+  const toggleMapFilter = (key: keyof typeof mapFilters) => {
+    setMapFilters(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const updateField = <K extends keyof FormData>(
     field: K,
@@ -97,6 +135,100 @@ export default function AnalyzePage() {
     }));
   };
 
+  const mapDistrictToNeighbourhood = (district: string): string => {
+    const neighbourhoodMap: Record<string, string> = {
+      "Mitte": "Mitte",
+      "Friedrichshain": "Friedrichshain-Kreuzberg",
+      "Kreuzberg": "Friedrichshain-Kreuzberg",
+      "Pankow": "Pankow",
+      "Prenzlauer Berg": "Pankow",
+      "Charlottenburg": "Charlottenburg-Wilm.",
+      "Wilmersdorf": "Charlottenburg-Wilm.",
+      "Spandau": "Spandau",
+      "Steglitz": "Steglitz-Zehlendorf",
+      "Zehlendorf": "Steglitz-Zehlendorf",
+      "Tempelhof": "Tempelhof-Schoeneberg",
+      "Schöneberg": "Tempelhof-Schoeneberg",
+      "Neukölln": "Neukoelln",
+      "Treptow": "Treptow-Koepenick",
+      "Köpenick": "Treptow-Koepenick",
+      "Reinickendorf": "Reinickendorf",
+      "Lichtenberg": "Lichtenberg",
+      "Marzahn": "Marzahn-Hellersdorf",
+      "Hellersdorf": "Marzahn-Hellersdorf"
+    };
+
+    for (const [key, value] of Object.entries(neighbourhoodMap)) {
+      if (district.includes(key)) {
+        return value;
+      }
+    }
+    return "";
+  };
+
+  const handleReverseGeocode = async (lat: number, lon: number) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+      );
+      const data = await response.json();
+
+      if (data && data.address) {
+        const addr = data.address;
+        const district = addr.suburb || addr.borough || addr.city_district || "";
+        const matched = mapDistrictToNeighbourhood(district);
+
+        if (matched) {
+          updateField("neighbourhood", matched);
+        }
+      }
+    } catch (err) {
+      console.error("Reverse geocoding failed:", err);
+    }
+  };
+
+  const handleGeocode = async () => {
+    if (!address) return;
+
+    setIsGeocoding(true);
+    setGeocodeError(null);
+
+    try {
+      // Use OpenStreetMap Nominatim API with address details
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&addressdetails=1`
+      );
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
+
+        updateField("latitude", lat);
+        updateField("longitude", lon);
+
+        // Map address to neighborhood
+        const addr = result.address;
+        const district = addr.suburb || addr.borough || addr.city_district || "";
+        const matched = mapDistrictToNeighbourhood(district);
+
+        if (matched) {
+          updateField("neighbourhood", matched);
+        }
+
+        // Map URL update is handled by useEffect now
+      } else {
+        setGeocodeError("Address not found. Please try again.");
+      }
+    } catch (err) {
+      console.error("Geocoding failed:", err);
+      setGeocodeError("Failed to find location. Please check your internet connection.");
+    }
+
+    setIsGeocoding(false);
+  };
+
   const handlePredict = async () => {
     setLoading(true);
     try {
@@ -107,9 +239,7 @@ export default function AnalyzePage() {
       });
       const data = await response.json();
       setPrediction(data.predicted_price);
-      setMapUrl(
-        `${API_URL}/map?lat=${formData.latitude}&lng=${formData.longitude}&price=${data.predicted_price}`
-      );
+      // Map URL update is handled by useEffect
     } catch (err) {
       console.error("Prediction failed:", err);
     }
@@ -126,38 +256,94 @@ export default function AnalyzePage() {
         return (
           <div className="space-y-4">
             <h2 className="text-xl font-bold mb-4">Step 1: Location</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>Latitude</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  className={inputClass}
-                  value={formData.latitude}
-                  onChange={(e) =>
-                    updateField("latitude", parseFloat(e.target.value) || 0)
-                  }
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Longitude</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  className={inputClass}
-                  value={formData.longitude}
-                  onChange={(e) =>
-                    updateField("longitude", parseFloat(e.target.value) || 0)
-                  }
-                />
-              </div>
+
+            {/* Location Mode Toggle */}
+            <div className="flex p-1 bg-gray-200 rounded-lg mb-4">
+              <button
+                className={`flex-1 py-1 px-3 rounded-md text-sm font-medium transition-all ${locationMode === 'coordinates'
+                  ? 'bg-white shadow text-black'
+                  : 'text-gray-600 hover:text-black'
+                  }`}
+                onClick={() => setLocationMode('coordinates')}
+              >
+                Coordinates
+              </button>
+              <button
+                className={`flex-1 py-1 px-3 rounded-md text-sm font-medium transition-all ${locationMode === 'address'
+                  ? 'bg-white shadow text-black'
+                  : 'text-gray-600 hover:text-black'
+                  }`}
+                onClick={() => setLocationMode('address')}
+              >
+                Address
+              </button>
             </div>
+
+            {locationMode === 'coordinates' ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Latitude</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className={inputClass}
+                    value={formData.latitude}
+                    onChange={(e) =>
+                      updateField("latitude", parseFloat(e.target.value) || 0)
+                    }
+                    onBlur={() => handleReverseGeocode(formData.latitude, formData.longitude)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Longitude</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className={inputClass}
+                    value={formData.longitude}
+                    onChange={(e) =>
+                      updateField("longitude", parseFloat(e.target.value) || 0)
+                    }
+                    onBlur={() => handleReverseGeocode(formData.latitude, formData.longitude)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className={labelClass}>Enter Address</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className={inputClass}
+                    placeholder="e.g. Alexanderplatz 1, Berlin"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGeocode()}
+                  />
+                  <button
+                    onClick={handleGeocode}
+                    disabled={isGeocoding || !address}
+                    className="px-4 py-2 bg-black text-white rounded-xl font-semibold disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {isGeocoding ? "..." : "Find"}
+                  </button>
+                </div>
+                {geocodeError && (
+                  <p className="text-red-500 text-xs">{geocodeError}</p>
+                )}
+                <div className="text-xs text-gray-500 mt-1">
+                  Resolved: {formData.latitude.toFixed(4)}, {formData.longitude.toFixed(4)}
+                </div>
+              </div>
+            )}
+
             <div>
-              <label className={labelClass}>Neighbourhood</label>
+              <label className={labelClass}>Neighbourhood (Auto-detected)</label>
               <select
-                className={inputClass}
+                className={`${inputClass} bg-gray-100 cursor-not-allowed`}
                 value={formData.neighbourhood}
                 onChange={(e) => updateField("neighbourhood", e.target.value)}
+                disabled={true}
               >
                 {options?.neighbourhoods.map((n) => (
                   <option key={n} value={n}>
@@ -402,7 +588,50 @@ export default function AnalyzePage() {
         </p>
 
         <div className="grid gap-8 md:grid-cols-3 flex-1">
-          <div className="md:col-span-2 rounded-2xl overflow-hidden shadow-lg">
+          <div className="md:col-span-2 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full">
+            {/* Map Filters */}
+            {prediction !== null && (
+              <div className="bg-white p-3 border-b border-gray-200 flex flex-wrap gap-2 items-center text-sm">
+                <span className="font-semibold mr-2">Filter Map:</span>
+                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={mapFilters.neighbourhood}
+                    onChange={() => toggleMapFilter('neighbourhood')}
+                    className="rounded text-black focus:ring-black"
+                  />
+                  Same Neighbourhood
+                </label>
+                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={mapFilters.bedrooms}
+                    onChange={() => toggleMapFilter('bedrooms')}
+                    className="rounded text-black focus:ring-black"
+                  />
+                  Same Bedrooms
+                </label>
+                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={mapFilters.beds}
+                    onChange={() => toggleMapFilter('beds')}
+                    className="rounded text-black focus:ring-black"
+                  />
+                  Same Beds
+                </label>
+                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={mapFilters.accommodates}
+                    onChange={() => toggleMapFilter('accommodates')}
+                    className="rounded text-black focus:ring-black"
+                  />
+                  Same Capacity
+                </label>
+              </div>
+            )}
+
             <iframe
               src={mapUrl}
               className="w-full h-full min-h-[500px] border-0"
@@ -416,13 +645,12 @@ export default function AnalyzePage() {
                 <button
                   key={s}
                   onClick={() => setStep(s)}
-                  className={`w-10 h-10 rounded-full font-bold transition-all ${
-                    step === s
-                      ? "bg-black text-white"
-                      : step > s
+                  className={`w-10 h-10 rounded-full font-bold transition-all ${step === s
+                    ? "bg-black text-white"
+                    : step > s
                       ? "bg-green-500 text-white"
                       : "bg-gray-200 text-gray-600"
-                  }`}
+                    }`}
                 >
                   {step > s ? "✓" : s}
                 </button>
@@ -493,11 +721,10 @@ export default function AnalyzePage() {
               {options?.amenities.map((amenity) => (
                 <label
                   key={amenity}
-                  className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
-                    formData.amenities.includes(amenity)
-                      ? "bg-black text-white"
-                      : "bg-gray-100 hover:bg-gray-200"
-                  }`}
+                  className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${formData.amenities.includes(amenity)
+                    ? "bg-black text-white"
+                    : "bg-gray-100 hover:bg-gray-200"
+                    }`}
                 >
                   <input
                     type="checkbox"

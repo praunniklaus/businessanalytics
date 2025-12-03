@@ -5,7 +5,8 @@ import os
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-def create_property_map(blue_marker=None, return_html=False):
+def create_property_map(blue_marker=None, return_html=False, 
+                        neighbourhood=None, bedrooms=None, beds=None, accommodates=None):
     data_path = os.path.join(project_root, 'data', 'data.csv')
     raw_data_path = os.path.join(project_root, 'data', 'raw_data.csv')
     
@@ -18,8 +19,37 @@ def create_property_map(blue_marker=None, return_html=False):
     
     raw_subset = raw_data[raw_data['id'].isin(train_ids)][
         ['id', 'latitude', 'longitude', 'price', 'review_scores_rating', 
-         'property_type', 'bedrooms', 'neighbourhood_group_cleansed']
+         'property_type', 'bedrooms', 'neighbourhood_group_cleansed',
+         'beds', 'accommodates']
     ].copy()
+    
+    if neighbourhood:
+        # Map API/Frontend names to CSV names
+        NEIGHBOURHOOD_MAPPING = {
+            'Neukoelln': 'Neukölln',
+            'Tempelhof-Schoeneberg': 'Tempelhof - Schöneberg',
+            'Treptow-Koepenick': 'Treptow - Köpenick',
+            'Steglitz-Zehlendorf': 'Steglitz - Zehlendorf',
+            'Marzahn-Hellersdorf': 'Marzahn - Hellersdorf',
+            'Charlottenburg-Wilm.': 'Charlottenburg-Wilm.',
+            'Friedrichshain-Kreuzberg': 'Friedrichshain-Kreuzberg',
+            'Pankow': 'Pankow',
+            'Mitte': 'Mitte',
+            'Lichtenberg': 'Lichtenberg',
+            'Spandau': 'Spandau',
+            'Reinickendorf': 'Reinickendorf'
+        }
+        mapped_neighbourhood = NEIGHBOURHOOD_MAPPING.get(neighbourhood, neighbourhood)
+        raw_subset = raw_subset[raw_subset['neighbourhood_group_cleansed'] == mapped_neighbourhood]
+    
+    if bedrooms is not None:
+        raw_subset = raw_subset[raw_subset['bedrooms'] == bedrooms]
+        
+    if beds is not None:
+        raw_subset = raw_subset[raw_subset['beds'] == beds]
+        
+    if accommodates is not None:
+        raw_subset = raw_subset[raw_subset['accommodates'] == accommodates]
     
     raw_subset['price_clean'] = raw_subset['price'].str.replace('$', '').str.replace(',', '').astype(float)
     

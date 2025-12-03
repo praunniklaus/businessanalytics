@@ -238,13 +238,24 @@ def predict_price(data: PropertyInput):
 def get_map(
     lat: Optional[float] = Query(None),
     lng: Optional[float] = Query(None),
-    price: Optional[float] = Query(None)
+    price: Optional[float] = Query(None),
+    neighbourhood: Optional[str] = Query(None),
+    bedrooms: Optional[float] = Query(None),
+    beds: Optional[float] = Query(None),
+    accommodates: Optional[int] = Query(None)
 ):
     blue_marker = None
     if lat is not None and lng is not None:
         blue_marker = {'lat': lat, 'lng': lng, 'price': price}
     
-    html = create_property_map(blue_marker=blue_marker, return_html=True)
+    html = create_property_map(
+        blue_marker=blue_marker, 
+        return_html=True,
+        neighbourhood=neighbourhood,
+        bedrooms=bedrooms,
+        beds=beds,
+        accommodates=accommodates
+    )
     return HTMLResponse(content=html)
 
 if __name__ == "__main__":
