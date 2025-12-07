@@ -12,16 +12,18 @@ from typing import Dict, Any, List, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from sklearn.compose import TransformedTargetRegressor
-from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import RidgeCV, LinearRegression, Ridge, Lasso
 from sklearn.ensemble import StackingRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.base import clone
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.neighbors import KNeighborsRegressor
 
 # Third-party boosters
 from xgboost import XGBRegressor
@@ -133,6 +135,70 @@ def main():
     print("\nTraining and benchmarking models on the same split...\n")
 
     candidates: List[Dict[str, Any]] = [
+        {
+            "name": "linear_regression",
+            "model": Pipeline([
+                ("scaler", StandardScaler()),
+                ("regressor", LinearRegression())
+            ]),
+            "log_target": False,
+            "params": {},
+        },
+        {
+            "name": "ridge",
+            "model": Pipeline([
+                ("scaler", StandardScaler()),
+                ("regressor", Ridge(random_state=RANDOM_STATE))
+            ]),
+            "log_target": False,
+            "params": {
+                "regressor__alpha": [0.01, 0.1, 1.0, 10.0, 100.0],
+            },
+        },
+        {
+            "name": "lasso",
+            "model": Pipeline([
+                ("scaler", StandardScaler()),
+                ("regressor", Lasso(random_state=RANDOM_STATE, max_iter=10000))
+            ]),
+            "log_target": False,
+            "params": {
+                "regressor__alpha": [0.01, 0.1, 1.0, 10.0, 100.0],
+            },
+        },
+        {
+            "name": "knn",
+            "model": Pipeline([
+                ("scaler", StandardScaler()),
+                ("knn", KNeighborsRegressor())
+            ]),
+            "log_target": False,
+            "params": {
+                "knn__n_neighbors": [3, 5, 7, 10, 15],
+                "knn__weights": ["uniform", "distance"],
+            },
+        },
+        {
+            "name": "decision_tree",
+            "model": DecisionTreeRegressor(random_state=RANDOM_STATE),
+            "log_target": False,
+            "params": {
+                "max_depth": [5, 10, 15, 20],
+                "min_samples_split": [2, 5, 10],
+                "min_samples_leaf": [1, 2, 4],
+            },
+        },
+        {
+            "name": "random_forest",
+            "model": RandomForestRegressor(random_state=RANDOM_STATE, n_jobs=-1),
+            "log_target": False,
+            "params": {
+                "n_estimators": [100, 200, 300],
+                "max_depth": [10, 15, 20],
+                "min_samples_split": [2, 5],
+                "min_samples_leaf": [1, 2],
+            },
+        },
         {
             "name": "xgboost_tuned",
             "model": XGBRegressor(
