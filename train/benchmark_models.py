@@ -12,14 +12,15 @@ from typing import Dict, Any, List, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.linear_model import RidgeCV
 from sklearn.ensemble import StackingRegressor
+from sklearn.neural_network import MLPRegressor
 from sklearn.base import clone
 
 # Third-party boosters
@@ -288,6 +289,56 @@ def main():
             ),
             "log_target": False,
             "params": {},
+        },
+        {
+            "name": "histgb_tuned",
+            "model": HistGradientBoostingRegressor(
+                max_iter=400,
+                learning_rate=0.1,
+                max_depth=12,
+                min_samples_leaf=10,
+                max_leaf_nodes=80,
+                l2_regularization=2.0,
+                early_stopping=True,
+                validation_fraction=0.1,
+                n_iter_no_change=10,
+                random_state=10,
+            ),
+            "log_target": False,
+            "params": {
+                "max_iter": [200, 400, 600, 800],
+                "learning_rate": [0.03, 0.05, 0.08, 0.1],
+                "max_depth": [6, 8, 10, 12],
+                "min_samples_leaf": [10, 20, 30],
+                "max_leaf_nodes": [50, 80, 100],
+                "l2_regularization": [0.1, 0.5, 1.0, 2.0],
+            },
+        },
+        {
+            "name": "mlp_tuned",
+            "model": Pipeline([
+                ("scaler", StandardScaler()),
+                ("mlp", MLPRegressor(
+                    hidden_layer_sizes=(256, 128, 64),
+                    activation="relu",
+                    alpha=0.1,
+                    learning_rate_init=0.005,
+                    batch_size=32,
+                    max_iter=500,
+                    early_stopping=True,
+                    validation_fraction=0.1,
+                    n_iter_no_change=15,
+                    random_state=10,
+                ))
+            ]),
+            "log_target": False,
+            "params": {
+                "mlp__hidden_layer_sizes": [(100,), (200,), (100, 50), (200, 100), (256, 128, 64)],
+                "mlp__activation": ["relu", "tanh"],
+                "mlp__alpha": [0.001, 0.01, 0.1],
+                "mlp__learning_rate_init": [0.001, 0.005, 0.01],
+                "mlp__batch_size": [32, 64, 128],
+            },
         },
     ]
 
