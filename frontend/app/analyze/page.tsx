@@ -1,14 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Cormorant_Garamond } from "next/font/google";
-
-const cormorantGaramond = Cormorant_Garamond({
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["italic", "normal"],
-  subsets: ["latin"],
-  variable: "--font-cormorant-garamond",
-});
+import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
 
 const API_URL = "http://localhost:8000";
 
@@ -86,6 +79,7 @@ export default function AnalyzePage() {
     beds: false,
     accommodates: false,
   });
+  const apiOrigin = new URL(API_URL).origin;
 
   useEffect(() => {
     fetch(`${API_URL}/options`)
@@ -119,12 +113,12 @@ export default function AnalyzePage() {
     setMapFilters(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const updateField = <K extends keyof FormData>(
+  const updateField = useCallback(<K extends keyof FormData>(
     field: K,
     value: FormData[K]
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
   const toggleAmenity = (amenity: string) => {
     setFormData((prev) => ({
@@ -166,7 +160,7 @@ export default function AnalyzePage() {
     return "";
   };
 
-  const handleReverseGeocode = async (lat: number, lon: number) => {
+  const handleReverseGeocode = useCallback(async (lat: number, lon: number) => {
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
@@ -185,7 +179,23 @@ export default function AnalyzePage() {
     } catch (err) {
       console.error("Reverse geocoding failed:", err);
     }
-  };
+  }, [updateField]);
+
+  // Listen for map click messages from the embedded map iframe to auto-fill coordinates
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== apiOrigin) return;
+      const { type, lat, lng } = event.data || {};
+      if (type === "map-click" && typeof lat === "number" && typeof lng === "number") {
+        updateField("latitude", lat);
+        updateField("longitude", lng);
+        handleReverseGeocode(lat, lng);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [apiOrigin, handleReverseGeocode]);
 
   const handleGeocode = async () => {
     if (!address) return;
@@ -247,15 +257,15 @@ export default function AnalyzePage() {
   };
 
   const inputClass =
-    "w-full rounded-xl border border-black/30 bg-white/80 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-black/60 text-sm";
-  const labelClass = "block text-sm font-semibold mb-1";
+    "w-full rounded-xl border border-black/30 bg-white/80 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-black/60 text-sm text-gray-900 placeholder:text-gray-700";
+  const labelClass = "block text-sm font-semibold mb-1 text-gray-900";
 
   const renderStep = () => {
     switch (step) {
       case 1:
         return (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold mb-4">Step 1: Location</h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Step 1: Location</h2>
 
             {/* Location Mode Toggle */}
             <div className="flex p-1 bg-gray-200 rounded-lg mb-4">
@@ -358,7 +368,7 @@ export default function AnalyzePage() {
       case 2:
         return (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold mb-4">Step 2: Property Details</h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Step 2: Property Details</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Room Type</label>
@@ -450,14 +460,14 @@ export default function AnalyzePage() {
       case 3:
         return (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold mb-4">Step 3: Amenities</h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Step 3: Amenities</h2>
             <p className="text-sm text-gray-600 mb-2">
               Selected: {formData.amenities.length} amenities
             </p>
             <button
               type="button"
               onClick={() => setAmenityModalOpen(true)}
-              className="w-full px-4 py-3 bg-white/80 border border-black/30 rounded-xl text-left hover:bg-white transition-colors"
+              className="w-full px-4 py-3 bg-white border border-black/40 rounded-xl text-left hover:bg-white transition-colors text-gray-900"
             >
               <span className="font-semibold">Click to select amenities</span>
               {formData.amenities.length > 0 && (
@@ -465,13 +475,13 @@ export default function AnalyzePage() {
                   {formData.amenities.slice(0, 5).map((a) => (
                     <span
                       key={a}
-                      className="text-xs bg-black/10 px-2 py-1 rounded"
+                      className="text-xs bg-black/10 px-2 py-1 rounded text-gray-900"
                     >
                       {a}
                     </span>
                   ))}
                   {formData.amenities.length > 5 && (
-                    <span className="text-xs bg-black/10 px-2 py-1 rounded">
+                    <span className="text-xs bg-black/10 px-2 py-1 rounded text-gray-900">
                       +{formData.amenities.length - 5} more
                     </span>
                   )}
@@ -484,7 +494,7 @@ export default function AnalyzePage() {
       case 4:
         return (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold mb-4">Step 4: Host & Reviews</h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Step 4: Host & Reviews</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Host Experience (days)</label>
@@ -530,7 +540,7 @@ export default function AnalyzePage() {
               />
             </div>
             <div className="border-t border-black/20 pt-4 mt-4">
-              <h3 className="font-semibold mb-3">Review Scores (1-5)</h3>
+              <h3 className="font-semibold mb-3 text-gray-900">Review Scores (1-5)</h3>
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { key: "review_scores_rating", label: "Overall Rating" },
@@ -542,7 +552,7 @@ export default function AnalyzePage() {
                   { key: "review_scores_value", label: "Value" },
                 ].map(({ key, label }) => (
                   <div key={key}>
-                    <label className="block text-xs font-medium mb-1">
+                    <label className="block text-xs font-medium mb-1 text-gray-900">
                       {label}
                     </label>
                     <input
@@ -578,8 +588,15 @@ export default function AnalyzePage() {
     >
       <div className="absolute inset-0 bg-[lightblue]/30"></div>
       <div
-        className={`relative z-10 flex flex-col min-h-screen px-8 py-12 ${cormorantGaramond.className}`}
+        className="relative z-10 flex flex-col min-h-screen px-8 py-12"
+        style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
       >
+        <Link
+          href="/"
+          className="absolute top-6 left-6 inline-flex items-center px-4 py-2 bg-white/90 border border-black/20 rounded-full text-gray-900 font-semibold shadow-sm hover:bg-white transition-colors"
+        >
+          Home
+        </Link>
         <h1 className="text-4xl md:text-5xl italic text-center mb-2">
           Analyze Your <span className="font-bold italic">Airbnb</span> Potential
         </h1>
@@ -591,41 +608,41 @@ export default function AnalyzePage() {
           <div className="md:col-span-2 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full">
             {/* Map Filters */}
             {prediction !== null && (
-              <div className="bg-white p-3 border-b border-gray-200 flex flex-wrap gap-2 items-center text-sm">
-                <span className="font-semibold mr-2">Filter Map:</span>
-                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
-                  <input
-                    type="checkbox"
-                    checked={mapFilters.neighbourhood}
-                    onChange={() => toggleMapFilter('neighbourhood')}
-                    className="rounded text-black focus:ring-black"
-                  />
-                  Same Neighbourhood
-                </label>
-                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
-                  <input
-                    type="checkbox"
-                    checked={mapFilters.bedrooms}
-                    onChange={() => toggleMapFilter('bedrooms')}
-                    className="rounded text-black focus:ring-black"
-                  />
-                  Same Bedrooms
-                </label>
-                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
-                  <input
-                    type="checkbox"
-                    checked={mapFilters.beds}
-                    onChange={() => toggleMapFilter('beds')}
-                    className="rounded text-black focus:ring-black"
-                  />
-                  Same Beds
-                </label>
-                <label className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200">
-                  <input
-                    type="checkbox"
-                    checked={mapFilters.accommodates}
-                    onChange={() => toggleMapFilter('accommodates')}
-                    className="rounded text-black focus:ring-black"
+            <div className="bg-white p-3 border-b border-gray-200 flex flex-wrap gap-2 items-center text-sm text-gray-900">
+              <span className="font-semibold mr-2">Filter Map:</span>
+              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
+                <input
+                  type="checkbox"
+                  checked={mapFilters.neighbourhood}
+                  onChange={() => toggleMapFilter('neighbourhood')}
+                  className="rounded text-black focus:ring-black"
+                />
+                Same Neighbourhood
+              </label>
+              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
+                <input
+                  type="checkbox"
+                  checked={mapFilters.bedrooms}
+                  onChange={() => toggleMapFilter('bedrooms')}
+                  className="rounded text-black focus:ring-black"
+                />
+                Same Number of Bedrooms
+              </label>
+              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
+                <input
+                  type="checkbox"
+                  checked={mapFilters.beds}
+                  onChange={() => toggleMapFilter('beds')}
+                  className="rounded text-black focus:ring-black"
+                />
+                Same Number of Beds
+              </label>
+              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
+                <input
+                  type="checkbox"
+                  checked={mapFilters.accommodates}
+                  onChange={() => toggleMapFilter('accommodates')}
+                  className="rounded text-black focus:ring-black"
                   />
                   Same Capacity
                 </label>
@@ -707,12 +724,12 @@ export default function AnalyzePage() {
 
       {amenityModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto text-gray-900 shadow-2xl">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Select Amenities</h3>
+              <h3 className="text-xl font-bold text-gray-900">Select Amenities</h3>
               <button
                 onClick={() => setAmenityModalOpen(false)}
-                className="text-2xl hover:text-gray-600"
+                className="text-2xl text-gray-500 hover:text-gray-700"
               >
                 &times;
               </button>
@@ -723,7 +740,7 @@ export default function AnalyzePage() {
                   key={amenity}
                   className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${formData.amenities.includes(amenity)
                     ? "bg-black text-white"
-                    : "bg-gray-100 hover:bg-gray-200"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-900 border border-gray-200"
                     }`}
                 >
                   <input

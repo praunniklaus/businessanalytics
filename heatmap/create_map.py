@@ -125,6 +125,28 @@ def create_property_map(blue_marker=None, return_html=False,
     </div>
     '''
     m.get_root().html.add_child(folium.Element(legend_html))
+
+    # Send click events to parent window so the frontend can auto-fill coordinates
+    click_js = f"""
+    <script>
+    (function() {{
+        var map = {m.get_name()};
+        map.on('click', function(e) {{
+            var payload = {{
+                type: "map-click",
+                lat: e.latlng.lat,
+                lng: e.latlng.lng
+            }};
+            try {{
+                window.parent.postMessage(payload, window.location.origin);
+            }} catch (err) {{
+                console.error('Map postMessage failed', err);
+            }}
+        }});
+    }})();
+    </script>
+    """
+    m.get_root().html.add_child(folium.Element(click_js))
     
     if return_html:
         return m._repr_html_()
@@ -137,4 +159,3 @@ def create_property_map(blue_marker=None, return_html=False,
 
 if __name__ == '__main__':
     create_property_map()
-

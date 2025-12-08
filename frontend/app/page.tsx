@@ -1,17 +1,12 @@
 import Link from "next/link";
-import { Cormorant_Garamond } from "next/font/google";
-
-const cormorantGaramond = Cormorant_Garamond({
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["italic", "normal"],
-  subsets: ["latin"],
-  variable: "--font-cormorant-garamond",
-});
 
 export default function Home() {
   return (
     <div className="relative min-h-screen bg-cover bg-bottom bg-no-repeat" style={{ backgroundImage: "url('/img/bg.png')" }}>
-      <div className={`relative z-10 flex flex-col items-center justify-end pb-[45vh] min-h-screen ${cormorantGaramond.className}`}>
+      <div
+        className="relative z-10 flex flex-col items-center justify-end pb-[45vh] min-h-screen"
+        style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+      >
         <h1 className="text-6xl italic text-center mb-10">
           See Your <span className="font-bold italic">Airbnb</span> Earning Potential.
         </h1>
@@ -24,4 +19,3 @@ export default function Home() {
     </div>
   );
 }
-
