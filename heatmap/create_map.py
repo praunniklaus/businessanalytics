@@ -1,12 +1,78 @@
+import os
 import pandas as pd
 import folium
 from sklearn.model_selection import train_test_split
-import os
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler
+import joblib
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-def create_property_map(blue_marker=None, return_html=False, 
-                        neighbourhood=None, bedrooms=None, beds=None, accommodates=None):
+knn_bundle = None
+
+
+def load_knn_bundle():
+    global knn_bundle
+    if knn_bundle is not None:
+        return knn_bundle
+
+    knn_path = os.path.join(project_root, "models", "knn_similarity.joblib")
+    if not os.path.exists(knn_path):
+        return None
+
+    try:
+        knn_bundle = joblib.load(knn_path)
+    except Exception as err:
+        print(f"Failed to load KNN bundle: {err}")
+        knn_bundle = None
+    return knn_bundle
+
+
+def find_similar_ids(focus_features):
+    bundle = load_knn_bundle()
+    if not bundle:
+        return None
+
+    feature_df = bundle["features"]
+    feature_cols = bundle["feature_names"]
+    scaler: StandardScaler = bundle["scaler"]
+    nn: NearestNeighbors = bundle["nn"]
+
+    if feature_df.empty:
+        return None
+
+    row = []
+    for col in feature_cols:
+        row.append(focus_features.get(col, feature_df[col].median()))
+
+    vector = scaler.transform([row])
+    n_neighbors = min(100, len(feature_df))
+    _, indices = nn.kneighbors(vector, n_neighbors=n_neighbors)
+    ids = feature_df.iloc[indices[0]]["id"].tolist()
+    return set(ids)
+
+
+def create_property_map(
+    blue_marker=None,
+    return_html=False,
+    neighbourhood=None,
+    bedrooms=None,
+    beds=None,
+    accommodates=None,
+    price_min=None,
+    price_max=None,
+    rating_min=None,
+    property_type_filter=None,
+    room_type_filter=None,
+    mode=None,
+    focus_lat=None,
+    focus_lng=None,
+    focus_price=None,
+    focus_bedrooms=None,
+    focus_beds=None,
+    focus_bathrooms=None,
+    focus_accommodates=None,
+):
     data_path = os.path.join(project_root, 'data', 'data.csv')
     raw_data_path = os.path.join(project_root, 'data', 'raw_data.csv')
     
@@ -18,9 +84,21 @@ def create_property_map(blue_marker=None, return_html=False,
     train_ids = train_data['id'].values
     
     raw_subset = raw_data[raw_data['id'].isin(train_ids)][
-        ['id', 'latitude', 'longitude', 'price', 'review_scores_rating', 
-         'property_type', 'bedrooms', 'neighbourhood_group_cleansed',
-         'beds', 'accommodates']
+        [
+            'id',
+            'latitude',
+            'longitude',
+            'price',
+            'review_scores_rating',
+            'property_type',
+            'room_type',
+            'bedrooms',
+            'neighbourhood_group_cleansed',
+            'beds',
+            'accommodates',
+            'bathrooms_text',
+            'number_of_reviews'
+        ]
     ].copy()
     
     if neighbourhood:
@@ -50,8 +128,44 @@ def create_property_map(blue_marker=None, return_html=False,
         
     if accommodates is not None:
         raw_subset = raw_subset[raw_subset['accommodates'] == accommodates]
-    
-    raw_subset['price_clean'] = raw_subset['price'].str.replace('$', '').str.replace(',', '').astype(float)
+
+    raw_subset['price_clean'] = (
+        raw_subset['price']
+        .astype(str)
+        .str.replace('$', '', regex=False)
+        .str.replace(',', '', regex=False)
+        .astype(float)
+    )
+
+    if price_min is not None:
+        raw_subset = raw_subset[raw_subset['price_clean'] >= price_min]
+
+    if price_max is not None:
+        raw_subset = raw_subset[raw_subset['price_clean'] <= price_max]
+
+    if rating_min is not None:
+        raw_subset = raw_subset[raw_subset['review_scores_rating'].fillna(0) >= rating_min]
+
+    if property_type_filter:
+        raw_subset = raw_subset[raw_subset['property_type'] == property_type_filter]
+
+    if room_type_filter:
+        raw_subset = raw_subset[raw_subset['room_type'] == room_type_filter]
+
+    similar_ids = None
+    if mode == "advanced" and focus_lat is not None and focus_lng is not None:
+        focus_features = {
+            "latitude": focus_lat,
+            "longitude": focus_lng,
+            "accommodates": focus_accommodates,
+            "bedrooms": focus_bedrooms,
+            "beds": focus_beds,
+            "bathrooms_numeric": focus_bathrooms,
+            "price_clean": focus_price,
+        }
+        similar_ids = find_similar_ids(focus_features) or None
+        if similar_ids:
+            raw_subset = raw_subset[raw_subset['id'].isin(similar_ids)]
     
     low_threshold = raw_subset['price_clean'].quantile(1/3)
     high_threshold = raw_subset['price_clean'].quantile(2/3)
@@ -74,14 +188,22 @@ def create_property_map(blue_marker=None, return_html=False,
             review = row['review_scores_rating'] if pd.notna(row['review_scores_rating']) else 'N/A'
             bedrooms = int(row['bedrooms']) if pd.notna(row['bedrooms']) else 'N/A'
             property_type = row['property_type'] if pd.notna(row['property_type']) else 'N/A'
+            room_type = row['room_type'] if pd.notna(row['room_type']) else 'N/A'
+            bathrooms = row['bathrooms_text'] if pd.notna(row['bathrooms_text']) else 'N/A'
             neighbourhood = row['neighbourhood_group_cleansed'] if pd.notna(row['neighbourhood_group_cleansed']) else 'N/A'
+            num_reviews = int(row['number_of_reviews']) if pd.notna(row['number_of_reviews']) else 'N/A'
             
-            tooltip_text = f"""
-            <b>Price:</b> {row['price']}<br>
-            <b>Review Score:</b> {review}<br>
-            <b>Property Type:</b> {property_type}<br>
-            <b>Bedrooms:</b> {bedrooms}<br>
-            <b>Neighbourhood:</b> {neighbourhood}
+            popup_text = f"""
+            <div style="font-size: 13px; line-height: 1.4;">
+                <b>Price:</b> {row['price']}<br>
+                <b>Neighbourhood:</b> {neighbourhood}<br>
+                <b>Property type:</b> {property_type}<br>
+                <b>Room type:</b> {room_type}<br>
+                <b>Bedrooms/Beds/Baths:</b> {bedrooms} / {row['beds']} / {bathrooms}<br>
+                <b>Accommodates:</b> {row['accommodates']} guests<br>
+                <b>Review score:</b> {review} ({num_reviews} reviews)<br>
+                <b>Coordinates:</b> {row['latitude']:.4f}, {row['longitude']:.4f}
+            </div>
             """
             
             folium.CircleMarker(
@@ -91,16 +213,38 @@ def create_property_map(blue_marker=None, return_html=False,
                 fill=True,
                 fill_color=color,
                 fill_opacity=0.7,
-                tooltip=folium.Tooltip(tooltip_text)
+                popup=folium.Popup(popup_text, max_width=320),
+                tooltip=folium.Tooltip(f"{property_type} • {row['price']} • {neighbourhood}")
             ).add_to(m)
     
     if blue_marker:
         lat, lng, price = blue_marker['lat'], blue_marker['lng'], blue_marker.get('price', 'N/A')
-        tooltip_text = f"""
-        <b>YOUR PROPERTY</b><br>
-        <b>Predicted Price:</b> ${price}<br>
-        <b>Location:</b> {lat:.4f}, {lng:.4f}
-        """
+        detail_accommodates = blue_marker.get('accommodates')
+        detail_bedrooms = blue_marker.get('bedrooms')
+        detail_beds = blue_marker.get('beds')
+        detail_bathrooms = blue_marker.get('bathrooms')
+        detail_neighbourhood = blue_marker.get('neighbourhood')
+        detail_property_type = blue_marker.get('property_type')
+        detail_room_type = blue_marker.get('room_type')
+
+        tooltip_lines = [
+            "<b>YOUR PROPERTY</b>",
+            f"<b>Predicted Price:</b> ${price}",
+            f"<b>Location:</b> {lat:.4f}, {lng:.4f}",
+        ]
+        if detail_neighbourhood:
+            tooltip_lines.append(f"<b>Neighbourhood:</b> {detail_neighbourhood}")
+        if detail_property_type:
+            tooltip_lines.append(f"<b>Property type:</b> {detail_property_type}")
+        if detail_room_type:
+            tooltip_lines.append(f"<b>Room type:</b> {detail_room_type}")
+        if detail_accommodates is not None:
+            tooltip_lines.append(f"<b>Accommodates:</b> {detail_accommodates}")
+        if detail_bedrooms is not None or detail_beds is not None or detail_bathrooms is not None:
+            tooltip_lines.append(
+                f"<b>Bedrooms/Beds/Baths:</b> {detail_bedrooms or 'N/A'} / {detail_beds or 'N/A'} / {detail_bathrooms or 'N/A'}"
+            )
+        tooltip_text = "<br>".join(tooltip_lines)
         folium.CircleMarker(
             location=[lat, lng],
             radius=10,
