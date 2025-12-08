@@ -43,7 +43,10 @@ def find_similar_ids(focus_features):
 
     row = []
     for col in feature_cols:
-        row.append(focus_features.get(col, feature_df[col].median()))
+        val = focus_features.get(col)
+        if val is None:
+            val = feature_df[col].median()
+        row.append(val)
 
     vector = scaler.transform([row])
     n_neighbors = min(100, len(feature_df))

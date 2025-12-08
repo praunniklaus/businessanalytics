@@ -45,9 +45,21 @@ def load_feature_averages() -> dict:
     if os.path.exists(raw_data_path):
         try:
             raw_df = pd.read_csv(raw_data_path)
+
+            host_experience_days = None
+            if 'host_experience' in raw_df.columns:
+                host_experience_days = float(raw_df['host_experience'].dropna().mean())
+            elif 'host_since' in raw_df.columns:
+                reference_col = raw_df['last_scraped'] if 'last_scraped' in raw_df.columns else None
+                host_since_dt = pd.to_datetime(raw_df['host_since'], errors='coerce')
+                if reference_col is not None:
+                    ref_dt = pd.to_datetime(reference_col, errors='coerce')
+                    host_experience_days = (ref_dt - host_since_dt).dt.days.dropna().mean()
+                else:
+                    host_experience_days = (pd.Timestamp.today() - host_since_dt).dt.days.dropna().mean()
+
             return {
-                "host_experience_days": float(raw_df['host_listings_count'].dropna().mean())
-                if 'host_listings_count' in raw_df.columns else 365.0,
+                "host_experience_days": float(host_experience_days) if host_experience_days is not None else 365.0,
                 "num_listings": float(raw_df['host_total_listings_count'].dropna().mean())
                 if 'host_total_listings_count' in raw_df.columns else 1.0,
                 "review_scores_rating": float(raw_df['review_scores_rating'].dropna().mean()),
