@@ -66,6 +66,7 @@ export default function AnalyzePage() {
   const [loading, setLoading] = useState(false);
   const [amenityModalOpen, setAmenityModalOpen] = useState(false);
   const [mapUrl, setMapUrl] = useState(`${API_URL}/map`);
+  const [useAverages, setUseAverages] = useState(false);
 
   // New state for location mode
   const [locationMode, setLocationMode] = useState<'coordinates' | 'address'>('coordinates');
@@ -78,15 +79,35 @@ export default function AnalyzePage() {
     bedrooms: false,
     beds: false,
     accommodates: false,
+    priceMin: "",
+    priceMax: "",
+    ratingMin: "",
+    propertyType: "",
+    roomType: "",
+    advancedMode: false,
   });
+
+  const [showForm, setShowForm] = useState(true);
   const apiOrigin = new URL(API_URL).origin;
 
   useEffect(() => {
-    fetch(`${API_URL}/options`)
-      .then((res) => res.json())
-      .then((data) => setOptions(data))
-      .catch((err) => console.error("Failed to load options:", err));
-  }, []);
+    const controller = new AbortController();
+
+    const loadOptions = async () => {
+      try {
+        const res = await fetch(`${API_URL}/options`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Options request failed with ${res.status}`);
+        const data = await res.json();
+        setOptions(data);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        console.error("Failed to load options:", err);
+      }
+    };
+
+    loadOptions();
+    return () => controller.abort();
+  }, [API_URL]);
 
   // Update map URL when filters or prediction data changes
   useEffect(() => {
@@ -105,12 +126,29 @@ export default function AnalyzePage() {
     if (mapFilters.bedrooms) params.append('bedrooms', formData.bedrooms.toString());
     if (mapFilters.beds) params.append('beds', formData.beds.toString());
     if (mapFilters.accommodates) params.append('accommodates', formData.accommodates.toString());
+    if (mapFilters.priceMin) params.append('price_min', mapFilters.priceMin);
+    if (mapFilters.priceMax) params.append('price_max', mapFilters.priceMax);
+    if (mapFilters.ratingMin) params.append('rating_min', mapFilters.ratingMin);
+    if (mapFilters.propertyType) params.append('property_type', mapFilters.propertyType);
+    if (mapFilters.roomType) params.append('room_type', mapFilters.roomType);
+    if (mapFilters.advancedMode) {
+      params.append('mode', 'advanced');
+      params.append('focus_bedrooms', formData.bedrooms.toString());
+      params.append('focus_beds', formData.beds.toString());
+      params.append('focus_bathrooms', formData.bathrooms.toString());
+      params.append('focus_accommodates', formData.accommodates.toString());
+      params.append('focus_price', prediction.toString());
+    }
 
     setMapUrl(`${API_URL}/map?${params.toString()}`);
   }, [prediction, mapFilters, formData]);
 
-  const toggleMapFilter = (key: keyof typeof mapFilters) => {
+  const toggleMapFilter = (key: 'neighbourhood' | 'bedrooms' | 'beds' | 'accommodates') => {
     setMapFilters(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const updateMapFilterValue = <K extends keyof typeof mapFilters>(key: K, value: (typeof mapFilters)[K]) => {
+    setMapFilters(prev => ({ ...prev, [key]: value }));
   };
 
   const updateField = useCallback(<K extends keyof FormData>(
@@ -239,16 +277,18 @@ export default function AnalyzePage() {
     setIsGeocoding(false);
   };
 
-  const handlePredict = async () => {
+  const handlePredict = async (useAvg = false) => {
+    setUseAverages(useAvg);
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, use_averages: useAvg }),
       });
       const data = await response.json();
       setPrediction(data.predicted_price);
+      setShowForm(false);
       // Map URL update is handled by useEffect
     } catch (err) {
       console.error("Prediction failed:", err);
@@ -495,6 +535,11 @@ export default function AnalyzePage() {
         return (
           <div className="space-y-4">
             <h2 className="text-xl font-bold mb-4 text-gray-900">Step 4: Host & Reviews</h2>
+            {useAverages && (
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-gray-800">
+                Using training averages for host & review metrics (skip mode).
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Host Experience (days)</label>
@@ -509,6 +554,8 @@ export default function AnalyzePage() {
                       parseInt(e.target.value) || 0
                     )
                   }
+                  disabled={useAverages}
+                  placeholder="avg from existing data"
                 />
               </div>
               <div>
@@ -521,6 +568,8 @@ export default function AnalyzePage() {
                   onChange={(e) =>
                     updateField("num_listings", parseInt(e.target.value) || 1)
                   }
+                  disabled={useAverages}
+                  placeholder="avg from existing data"
                 />
               </div>
             </div>
@@ -537,6 +586,8 @@ export default function AnalyzePage() {
                     parseInt(e.target.value) || 0
                   )
                 }
+                disabled={useAverages}
+                placeholder="avg from existing data"
               />
             </div>
             <div className="border-t border-black/20 pt-4 mt-4">
@@ -568,6 +619,8 @@ export default function AnalyzePage() {
                           parseFloat(e.target.value) || 1
                         )
                       }
+                        disabled={useAverages}
+                        placeholder="avg from existing data"
                     />
                   </div>
                 ))}
@@ -605,55 +658,122 @@ export default function AnalyzePage() {
         </p>
 
         <div className="grid gap-8 md:grid-cols-3 flex-1">
-          <div className="md:col-span-2 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full">
-            {/* Map Filters */}
-            {prediction !== null && (
-            <div className="bg-white p-3 border-b border-gray-200 flex flex-wrap gap-2 items-center text-sm text-gray-900">
-              <span className="font-semibold mr-2">Filter Map:</span>
-              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
-                <input
-                  type="checkbox"
-                  checked={mapFilters.neighbourhood}
-                  onChange={() => toggleMapFilter('neighbourhood')}
-                  className="rounded text-black focus:ring-black"
-                />
-                Same Neighbourhood
-              </label>
-              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
-                <input
-                  type="checkbox"
-                  checked={mapFilters.bedrooms}
-                  onChange={() => toggleMapFilter('bedrooms')}
-                  className="rounded text-black focus:ring-black"
-                />
-                Same Number of Bedrooms
-              </label>
-              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
-                <input
-                  type="checkbox"
-                  checked={mapFilters.beds}
-                  onChange={() => toggleMapFilter('beds')}
-                  className="rounded text-black focus:ring-black"
-                />
-                Same Number of Beds
-              </label>
-              <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 text-gray-900">
-                <input
-                  type="checkbox"
-                  checked={mapFilters.accommodates}
-                  onChange={() => toggleMapFilter('accommodates')}
-                  className="rounded text-black focus:ring-black"
-                  />
-                  Same Capacity
-                </label>
-              </div>
-            )}
-
+          <div className="md:col-span-2 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full bg-white/80">
             <iframe
               src={mapUrl}
-              className="w-full h-full min-h-[500px] border-0"
+              className="w-full h-full min-h-[520px] border-0"
               title="Property Map"
             />
+            {prediction !== null && (
+              <div className="border-t border-gray-200 p-4 space-y-3 text-sm text-gray-900">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <span className="font-semibold">Filters</span>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={mapFilters.advancedMode}
+                        onChange={() => updateMapFilterValue('advancedMode', !mapFilters.advancedMode)}
+                        className="rounded text-black focus:ring-black"
+                      />
+                      {mapFilters.advancedMode ? "Advanced KNN (on)" : "Advanced KNN (off)"}
+                    </label>
+                    {mapFilters.advancedMode && (
+                      <span className="text-xs text-gray-600">
+                        Using advanced KNN filter now.
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {!mapFilters.advancedMode && (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {(['neighbourhood', 'bedrooms', 'beds', 'accommodates'] as const).map((key) => (
+                        <label key={key} className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={mapFilters[key]}
+                            onChange={() => toggleMapFilter(key)}
+                            className="rounded text-black focus:ring-black"
+                          />
+                          {key === 'neighbourhood' ? 'Same Neighbourhood' :
+                            key === 'bedrooms' ? 'Same Bedrooms' :
+                            key === 'beds' ? 'Same Beds' : 'Same Capacity'}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold mb-1">Price min</label>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          value={mapFilters.priceMin}
+                          onChange={(e) => updateMapFilterValue('priceMin', e.target.value)}
+                          placeholder="e.g. 80"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold mb-1">Price max</label>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          value={mapFilters.priceMax}
+                          onChange={(e) => updateMapFilterValue('priceMax', e.target.value)}
+                          placeholder="e.g. 250"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold mb-1">Rating min</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          max={5}
+                          className={inputClass}
+                          value={mapFilters.ratingMin}
+                          onChange={(e) => updateMapFilterValue('ratingMin', e.target.value)}
+                          placeholder="4.5"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold mb-1">Property type</label>
+                        <select
+                          className={inputClass}
+                          value={mapFilters.propertyType}
+                          onChange={(e) => updateMapFilterValue('propertyType', e.target.value)}
+                        >
+                          <option value="">Any</option>
+                          {options?.property_types.map((pt) => (
+                            <option key={pt} value={pt}>{pt}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold mb-1">Room type</label>
+                        <select
+                          className={inputClass}
+                          value={mapFilters.roomType}
+                          onChange={(e) => updateMapFilterValue('roomType', e.target.value)}
+                        >
+                          <option value="">Any</option>
+                          {options?.room_types.map((rt) => (
+                            <option key={rt} value={rt}>{rt}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {mapFilters.advancedMode && (
+                  <div className="p-3 rounded-lg bg-gray-100 border border-gray-200 text-xs text-gray-700">
+                    Showing closest matches via KNN similarity (location, price, size, beds, baths, accommodates).
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 flex flex-col">
@@ -674,50 +794,88 @@ export default function AnalyzePage() {
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto">{renderStep()}</div>
+            {showForm ? (
+              <>
+                <div className="flex-1 overflow-y-auto">{renderStep()}</div>
 
-            <div className="mt-6 space-y-3">
-              <div className="flex gap-2">
-                {step > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setStep(step - 1)}
-                    className="flex-1 px-4 py-2 bg-gray-200 text-black rounded-full font-semibold hover:bg-gray-300 transition-all"
-                  >
-                    Back
-                  </button>
-                )}
-                {step < 4 && (
-                  <button
-                    type="button"
-                    onClick={() => setStep(step + 1)}
-                    className="flex-1 px-4 py-2 bg-black text-white rounded-full font-semibold hover:bg-gray-800 transition-all"
-                  >
-                    Next
-                  </button>
-                )}
-              </div>
+                <div className="mt-6 space-y-3">
+                  <div className="flex gap-2">
+                    {step > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setStep(step - 1)}
+                        className="flex-1 px-4 py-2 bg-gray-200 text-black rounded-full font-semibold hover:bg-gray-300 transition-all"
+                      >
+                        Back
+                      </button>
+                    )}
+                    {step < 4 && (
+                      <button
+                        type="button"
+                        onClick={() => setStep(step + 1)}
+                        className="flex-1 px-4 py-2 bg-black text-white rounded-full font-semibold hover:bg-gray-800 transition-all"
+                      >
+                        Next
+                      </button>
+                    )}
+                  </div>
 
-              {step === 4 && (
+                  {step === 4 && (
+                    <button
+                      type="button"
+                      onClick={() => handlePredict(false)}
+                      disabled={loading}
+                      className="w-full px-6 py-3 bg-black text-white rounded-full font-semibold text-lg border-2 border-black transition-all shadow-xl hover:shadow-black/60 hover:scale-105 active:scale-100 disabled:opacity-50"
+                    >
+                      {loading ? "Predicting..." : "Predict Price"}
+                    </button>
+                  )}
+                  {step === 4 && (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePredict(true)}
+                        disabled={loading}
+                        className="w-full px-6 py-3 bg-gray-900 text-white rounded-full font-semibold border-2 border-gray-900 transition-all hover:bg-gray-800 disabled:opacity-50"
+                      >
+                        {loading ? "Predicting..." : "Skip this section (use averages)"}
+                      </button>
+                      {useAverages && (
+                        <button
+                          type="button"
+                          onClick={() => setUseAverages(false)}
+                          className="text-xs underline text-gray-700"
+                        >
+                          Use my inputs instead
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col justify-center items-center gap-4">
+                <div className="mt-4 p-6 bg-green-100 rounded-xl text-center w-full">
+                  <p className="text-sm text-gray-600">Predicted Nightly Price</p>
+                  {prediction !== null && (
+                    <p className="text-4xl font-bold text-green-700">
+                      ${prediction.toFixed(2)}
+                    </p>
+                  )}
+                </div>
                 <button
                   type="button"
-                  onClick={handlePredict}
-                  disabled={loading}
-                  className="w-full px-6 py-3 bg-black text-white rounded-full font-semibold text-lg border-2 border-black transition-all shadow-xl hover:shadow-black/60 hover:scale-105 active:scale-100 disabled:opacity-50"
+                  onClick={() => {
+                    setShowForm(true);
+                    setPrediction(null);
+                    setStep(1);
+                  }}
+                  className="px-6 py-3 bg-gray-200 text-black rounded-full font-semibold hover:bg-gray-300 transition-all"
                 >
-                  {loading ? "Predicting..." : "Predict Price"}
+                  Back to inputs
                 </button>
-              )}
-
-              {prediction !== null && (
-                <div className="mt-4 p-4 bg-green-100 rounded-xl text-center">
-                  <p className="text-sm text-gray-600">Predicted Nightly Price</p>
-                  <p className="text-3xl font-bold text-green-700">
-                    ${prediction.toFixed(2)}
-                  </p>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

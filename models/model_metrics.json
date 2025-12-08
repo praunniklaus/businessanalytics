@@ -1,0 +1,21 @@
+{
+  "knn.joblib": 348.9226554592214,
+  "catboost.joblib": 240.39530799022089,
+  "lightgbm_tuned.joblib": 273.75235985433864,
+  "stacking_ensemble.joblib": 262.2631375258359,
+  "lightgbm.joblib": 387.5335485880909,
+  "lasso.joblib": 1209.0760464286423,
+  "xgboost_improved.joblib": 249.06930957830326,
+  "ridge.joblib": 1209.1897033135874,
+  "gradient_boosting.joblib": 279.96449010122916,
+  "random_forest.joblib": 265.1185378813112,
+  "xgboost.joblib": 228.8124237361443,
+  "sklearn_gbr.joblib": 266.74998498381393,
+  "linear_regression.joblib": 1209.1824079909898,
+  "histgb_tuned.joblib": 389.6459919658253,
+  "xgboost_tuned.joblib": 218.53146866807572,
+  "decision_tree.joblib": 289.85108073773404,
+  "xgboost_log_enhanced.joblib": 338.3898916770102,
+  "catboost_tuned.joblib": 245.4803227974988,
+  "mlp_tuned.joblib": 380.47092912003325
+}
