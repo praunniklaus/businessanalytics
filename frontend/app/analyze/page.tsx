@@ -63,10 +63,16 @@ export default function AnalyzePage() {
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   const [options, setOptions] = useState<Options | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);
+  const [predictionError, setPredictionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [amenityModalOpen, setAmenityModalOpen] = useState(false);
   const [mapUrl, setMapUrl] = useState(`${API_URL}/map`);
   const [useAverages, setUseAverages] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<{
+    ok: boolean | null;
+    message: string | null;
+    checking: boolean;
+  }>({ ok: null, message: null, checking: false });
 
   // New state for location mode
   const [locationMode, setLocationMode] = useState<'coordinates' | 'address'>('coordinates');
@@ -198,6 +204,37 @@ export default function AnalyzePage() {
     return "";
   };
 
+  // Validate location proximity to known listings (15 km limit) on input changes
+  useEffect(() => {
+    const controller = new AbortController();
+    const { latitude, longitude } = formData;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
+    setLocationStatus((prev) => ({ ...prev, checking: true }));
+    fetch(`${API_URL}/validate_location?lat=${latitude}&lng=${longitude}`, {
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.ok && data) {
+          if (data.ok) {
+            setLocationStatus({ ok: true, message: null, checking: false });
+          } else {
+            const msg = `Location is ${data.min_distance_km.toFixed(1)} km away from the nearest listing (limit ${data.limit_km} km).`;
+            setLocationStatus({ ok: false, message: msg, checking: false });
+          }
+        } else {
+          setLocationStatus({ ok: null, message: "Could not validate location.", checking: false });
+        }
+      })
+      .catch((err) => {
+        if ((err as Error).name === "AbortError") return;
+        setLocationStatus({ ok: null, message: "Could not validate location.", checking: false });
+      });
+
+    return () => controller.abort();
+  }, [formData.latitude, formData.longitude]);
+
   const handleReverseGeocode = useCallback(async (lat: number, lon: number) => {
     try {
       const response = await fetch(
@@ -280,18 +317,34 @@ export default function AnalyzePage() {
   const handlePredict = async (useAvg = false) => {
     setUseAverages(useAvg);
     setLoading(true);
+    setPredictionError(null);
     try {
       const response = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, use_averages: useAvg }),
       });
+      if (!response.ok) {
+        let detail = "Prediction failed. Please adjust your inputs.";
+        try {
+          const data = await response.json();
+          if (data?.detail) detail = data.detail;
+        } catch (_) {
+          // ignore parse errors
+        }
+        setPredictionError(detail);
+        if (detail.toLowerCase().includes("location")) {
+          setLocationStatus({ ok: false, message: detail, checking: false });
+        }
+        return;
+      }
       const data = await response.json();
       setPrediction(data.predicted_price);
       setShowForm(false);
       // Map URL update is handled by useEffect
     } catch (err) {
       console.error("Prediction failed:", err);
+      setPredictionError("Prediction failed. Please try again.");
     }
     setLoading(false);
   };
@@ -299,6 +352,10 @@ export default function AnalyzePage() {
   const inputClass =
     "w-full rounded-xl border border-black/30 bg-white/80 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-black/60 text-sm text-gray-900 placeholder:text-gray-700";
   const labelClass = "block text-sm font-semibold mb-1 text-gray-900";
+  const maxGuests = 15;
+  const maxBedrooms = 10;
+  const maxBeds = 10;
+  const maxBathrooms = 5;
 
   const renderStep = () => {
     switch (step) {
@@ -401,6 +458,15 @@ export default function AnalyzePage() {
                   </option>
                 ))}
               </select>
+              {locationStatus.message && (
+                <p
+                  className={`mt-2 text-xs ${
+                    locationStatus.ok === false ? "text-red-600" : "text-gray-600"
+                  }`}
+                >
+                  {locationStatus.checking ? "Checking location..." : locationStatus.message}
+                </p>
+              )}
             </div>
           </div>
         );
@@ -445,10 +511,14 @@ export default function AnalyzePage() {
                 <input
                   type="number"
                   min={1}
+                  max={maxGuests}
                   className={inputClass}
                   value={formData.accommodates}
                   onChange={(e) =>
-                    updateField("accommodates", parseInt(e.target.value) || 1)
+                    updateField(
+                      "accommodates",
+                      Math.min(maxGuests, Math.max(1, parseInt(e.target.value) || 1))
+                    )
                   }
                 />
               </div>
@@ -457,11 +527,15 @@ export default function AnalyzePage() {
                 <input
                   type="number"
                   min={0}
+                  max={maxBedrooms}
                   step={1}
                   className={inputClass}
                   value={formData.bedrooms}
                   onChange={(e) =>
-                    updateField("bedrooms", parseFloat(e.target.value) || 0)
+                    updateField(
+                      "bedrooms",
+                      Math.min(maxBedrooms, Math.max(0, parseFloat(e.target.value) || 0))
+                    )
                   }
                 />
               </div>
@@ -472,11 +546,15 @@ export default function AnalyzePage() {
                 <input
                   type="number"
                   min={0}
+                  max={maxBeds}
                   step={1}
                   className={inputClass}
                   value={formData.beds}
                   onChange={(e) =>
-                    updateField("beds", parseFloat(e.target.value) || 0)
+                    updateField(
+                      "beds",
+                      Math.min(maxBeds, Math.max(0, parseFloat(e.target.value) || 0))
+                    )
                   }
                 />
               </div>
@@ -485,11 +563,15 @@ export default function AnalyzePage() {
                 <input
                   type="number"
                   min={0}
+                  max={maxBathrooms}
                   step={0.5}
                   className={inputClass}
                   value={formData.bathrooms}
                   onChange={(e) =>
-                    updateField("bathrooms", parseFloat(e.target.value) || 0)
+                    updateField(
+                      "bathrooms",
+                      Math.min(maxBathrooms, Math.max(0, parseFloat(e.target.value) || 0))
+                    )
                   }
                 />
               </div>
@@ -813,7 +895,10 @@ export default function AnalyzePage() {
                       <button
                         type="button"
                         onClick={() => setStep(step + 1)}
-                        className="flex-1 px-4 py-2 bg-black text-white rounded-full font-semibold hover:bg-gray-800 transition-all"
+                        className={`flex-1 px-4 py-2 bg-black text-white rounded-full font-semibold hover:bg-gray-800 transition-all ${
+                          step === 1 && locationStatus.ok === false ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
+                        disabled={step === 1 && locationStatus.ok === false}
                       >
                         Next
                       </button>
@@ -857,10 +942,13 @@ export default function AnalyzePage() {
               <div className="flex-1 flex flex-col justify-center items-center gap-4">
                 <div className="mt-4 p-6 bg-green-100 rounded-xl text-center w-full">
                   <p className="text-sm text-gray-600">Predicted Nightly Price</p>
-                  {prediction !== null && (
+                  {typeof prediction === "number" && (
                     <p className="text-4xl font-bold text-green-700">
                       ${prediction.toFixed(2)}
                     </p>
+                  )}
+                  {predictionError && (
+                    <p className="text-sm text-red-600 mt-2">{predictionError}</p>
                   )}
                 </div>
                 <button
@@ -868,6 +956,7 @@ export default function AnalyzePage() {
                   onClick={() => {
                     setShowForm(true);
                     setPrediction(null);
+                    setPredictionError(null);
                     setStep(1);
                   }}
                   className="px-6 py-3 bg-gray-200 text-black rounded-full font-semibold hover:bg-gray-300 transition-all"
