@@ -8,3 +8,4 @@ catboost
 fastapi
 uvicorn
 folium
+matplotlib

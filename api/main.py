@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -96,6 +96,65 @@ def load_feature_averages() -> dict:
 
 
 feature_averages = load_feature_averages()
+MAX_DISTANCE_KM = 15.0
+reference_coords = None
+MAX_ACCOMMODATES = 15
+MAX_BEDROOMS = 10
+MAX_BEDS = 10
+MAX_BATHROOMS = 5
+MIN_PRICE = 30.0
+
+
+def load_reference_coords():
+    """Load listing coordinates from raw_data.csv for distance checks."""
+    global reference_coords
+    if reference_coords is not None:
+        return reference_coords
+
+    raw_data_path = os.path.join(project_root, 'data', 'raw_data.csv')
+    if not os.path.exists(raw_data_path):
+        reference_coords = np.array([])
+        return reference_coords
+
+    try:
+        raw_df = pd.read_csv(raw_data_path)
+        coords = raw_df[["latitude", "longitude"]].dropna()
+        reference_coords = coords.to_numpy()
+    except Exception:
+        reference_coords = np.array([])
+    return reference_coords
+
+
+def nearest_listing_distance_km(lat: float, lon: float) -> float:
+    coords = load_reference_coords()
+    if coords.size == 0:
+        return 0.0
+
+    # Vectorized haversine against all known listings
+    lat1 = math.radians(lat)
+    lon1 = math.radians(lon)
+    lat2 = np.radians(coords[:, 0])
+    lon2 = np.radians(coords[:, 1])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    c = 2 * np.arcsin(np.sqrt(a))
+    distances = 6371 * c
+    return float(np.min(distances))
+
+
+@app.get("/validate_location")
+def validate_location(lat: float = Query(...), lng: float = Query(...)):
+    """
+    Check how far a point is from the nearest known listing.
+    Returns ok=False when beyond MAX_DISTANCE_KM so the frontend can block input early.
+    """
+    min_dist = nearest_listing_distance_km(lat, lng)
+    return {
+        "ok": min_dist <= MAX_DISTANCE_KM,
+        "min_distance_km": min_dist,
+        "limit_km": MAX_DISTANCE_KM,
+    }
 
 
 def evaluate_models_once() -> dict:
@@ -147,6 +206,15 @@ def load_model_metrics() -> dict:
 
 
 def select_best_model():
+    # Prefer CatBoost for serving when available
+    for candidate in ["catboost_tuned.joblib", "catboost.joblib"]:
+        path = os.path.join(models_dir, candidate)
+        if os.path.exists(path):
+            model = joblib.load(path)
+            print(f"Loaded preferred model '{candidate}' for prediction.")
+            return model, candidate
+
+    # Otherwise choose by best RMSE from metrics
     metrics = load_model_metrics()
     if not metrics:
         metrics = evaluate_models_once()
@@ -154,7 +222,6 @@ def select_best_model():
     if metrics:
         best_name = min(metrics.items(), key=lambda kv: kv[1])[0]
     else:
-        # Default to current best-performer
         best_name = 'catboost_tuned.joblib'
 
     path = os.path.join(models_dir, best_name)
@@ -237,6 +304,29 @@ class PropertyInput(BaseModel):
     number_of_reviews: Optional[int] = None
     use_averages: bool = False
 
+
+def validate_limits(data: PropertyInput):
+    if data.accommodates > MAX_ACCOMMODATES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Guests exceeds maximum of {MAX_ACCOMMODATES}.",
+        )
+    if data.bedrooms is not None and data.bedrooms > MAX_BEDROOMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bedrooms exceeds maximum of {MAX_BEDROOMS}.",
+        )
+    if data.beds is not None and data.beds > MAX_BEDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Beds exceeds maximum of {MAX_BEDS}.",
+        )
+    if data.bathrooms is not None and data.bathrooms > MAX_BATHROOMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bathrooms exceeds maximum of {MAX_BATHROOMS}.",
+        )
+
 @app.get("/options")
 def get_options():
     return {
@@ -270,6 +360,15 @@ def resolve_with_averages(data: PropertyInput) -> PropertyInput:
 
 @app.post("/predict")
 def predict_price(data: PropertyInput):
+    # Hard guard: keep predictions near known Berlin listings
+    min_dist = nearest_listing_distance_km(data.latitude, data.longitude)
+    if min_dist > MAX_DISTANCE_KM:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Location too far from known listings (nearest is {min_dist:.1f} km; limit is {MAX_DISTANCE_KM} km)."
+        )
+
+    validate_limits(data)
     data = resolve_with_averages(data)
     distances = {}
     for landmark_name, (lat, lon) in LANDMARKS.items():
@@ -399,6 +498,7 @@ def predict_price(data: PropertyInput):
     feature_vector = [features.get(f, 0) for f in feature_order]
     
     prediction = model.predict([feature_vector])[0]
+    prediction = max(float(prediction), MIN_PRICE)
     
     return {
         "predicted_price": round(float(prediction), 2),
@@ -468,4 +568,3 @@ def get_map(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
