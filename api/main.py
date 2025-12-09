@@ -155,7 +155,7 @@ def select_best_model():
         best_name = min(metrics.items(), key=lambda kv: kv[1])[0]
     else:
         # Default to current best-performer
-        best_name = 'catboost_tuned.joblib'
+        best_name = 'stacking_ensemble.joblib'
 
     path = os.path.join(models_dir, best_name)
     if not os.path.exists(path):

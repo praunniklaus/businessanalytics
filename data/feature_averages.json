@@ -1,15 +1,15 @@
 {
-  "host_experience_days": 2783.266666666667,
+  "host_experience_days": 2782.7346274807505,
   "num_listings": 29.718373071528752,
-  "review_scores_rating": 4.7627651515151515,
-  "review_scores_accuracy": 4.8017543290043285,
-  "review_scores_cleanliness": 4.733260822510823,
-  "review_scores_checkin": 4.83897619047619,
-  "review_scores_communication": 4.828863636363636,
-  "review_scores_location": 4.774316017316017,
-  "review_scores_value": 4.638824675324676,
-  "number_of_reviews": 60.18041125541126,
-  "bedrooms": 1.327056277056277,
-  "beds": 2.0267316017316017,
-  "bathrooms": 1.1517857142857142
+  "review_scores_rating": 4.7626255286845245,
+  "review_scores_accuracy": 4.799451252575643,
+  "review_scores_cleanliness": 4.733112460687561,
+  "review_scores_checkin": 4.8388341828435095,
+  "review_scores_communication": 4.828776705346492,
+  "review_scores_location": 4.774206702093048,
+  "review_scores_value": 4.638750677800672,
+  "number_of_reviews": 60.286086107797416,
+  "bedrooms": 1.3236091530202798,
+  "beds": 2.023424791237393,
+  "bathrooms": 1.1499295087300727
 }

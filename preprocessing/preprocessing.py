@@ -59,8 +59,8 @@ def preprocess():
     # Drop entries without price
     data = data.dropna(subset=['price'])
 
-    # Remove price outliers (over 3000)
-    data = data[data['price'] <= 3000]
+    # Remove price outliers (over 1000)
+    data = data[data['price'] <= 1000]
 
     # Convert room_type to binary columns
     room_types = data['room_type'].unique()
