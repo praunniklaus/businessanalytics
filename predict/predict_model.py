@@ -51,12 +51,12 @@ if __name__ == '__main__':
         else:
             model_path = os.path.join(models_dir, f"{model_arg}.joblib")
     else:
-        default_model = 'gradient_boosting.joblib'
+        default_model = 'catboost_tuned.joblib'
         model_path = os.path.join(models_dir, default_model)
         print(f"No model specified. Using default: {default_model}")
         print(f"Usage: python predict/predict_model.py <model_name>")
-        print(f"Example: python predict/predict_model.py gradient_boosting")
-        print(f"         python predict/predict_model.py models/gradient_boosting.joblib")
+        print(f"Example: python predict/predict_model.py catboost_tuned")
+        print(f"         python predict/predict_model.py models/catboost_tuned.joblib")
         print()
     
     if not os.path.exists(model_path):
