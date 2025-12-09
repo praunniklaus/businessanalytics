@@ -154,8 +154,8 @@ def select_best_model():
     if metrics:
         best_name = min(metrics.items(), key=lambda kv: kv[1])[0]
     else:
-        # Fallback to legacy default
-        best_name = 'xgboost.joblib'
+        # Default to current best-performer
+        best_name = 'catboost_tuned.joblib'
 
     path = os.path.join(models_dir, best_name)
     if not os.path.exists(path):
