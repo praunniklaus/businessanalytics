@@ -206,6 +206,15 @@ def load_model_metrics() -> dict:
 
 
 def select_best_model():
+    # Prefer CatBoost for serving when available
+    for candidate in ["catboost_tuned.joblib", "catboost.joblib"]:
+        path = os.path.join(models_dir, candidate)
+        if os.path.exists(path):
+            model = joblib.load(path)
+            print(f"Loaded preferred model '{candidate}' for prediction.")
+            return model, candidate
+
+    # Otherwise choose by best RMSE from metrics
     metrics = load_model_metrics()
     if not metrics:
         metrics = evaluate_models_once()
@@ -213,7 +222,6 @@ def select_best_model():
     if metrics:
         best_name = min(metrics.items(), key=lambda kv: kv[1])[0]
     else:
-        # Default to current best-performer
         best_name = 'catboost_tuned.joblib'
 
     path = os.path.join(models_dir, best_name)
