@@ -68,34 +68,40 @@ The frontend will be available at `http://localhost:3000`
 
 ```
 .
-├── api/                    # FastAPI backend
-│   └── main.py             # API endpoints for predictions
-├── data/                   # Data files
-│   ├── raw_data.csv        # Original raw data
-│   ├── preprocessed.csv    # Preprocessed data
-│   ├── data.csv           # Final feature-engineered data
-│   └── split.csv          # Train/test split IDs
-├── frontend/              # Next.js frontend
+├── api/                      # FastAPI backend
+│   └── main.py               # Prediction endpoints
+├── data/                     # Data artifacts and helpers
+│   ├── raw_data.csv          # Raw scrape
+│   ├── preprocessed.csv      # Cleaned data
+│   ├── data.csv              # Feature-engineered data
+│   ├── split.csv             # Train/val/test ids
+│   ├── feature_averages.json # Neighborhood aggregates
+│   ├── create_feature_averages.py # Generate neighborhood averages
+│   └── create_split.py       # Build train/val/test split
+├── frontend/                 # Next.js frontend
 │   └── app/
-│       └── analyze/       # Analysis page with prediction form
-├── heatmap/               # Map generation scripts
-│   └── create_map.py      # Creates interactive property map
-├── models/                # Trained ML models
-│   ├── xgboost.joblib
-│   ├── catboost.joblib
-│   ├── lightgbm.joblib
-│   └── gradient_boosting.joblib
-├── preprocessing/         # Data preprocessing scripts
-│   ├── preprocessing.py  # Main preprocessing pipeline
-│   └── feature_eng.py    # Feature engineering
-├── predict/              # Prediction utilities
+│       └── analyze/          # Analysis page with prediction form
+├── heatmap/                  # Map generation
+│   ├── create_map.py         # Builds static property map
+│   └── property_map.html     # Generated map
+├── models/                   # Trained models and benchmarks
+│   ├── *.joblib              # Model artifacts
+│   ├── model_benchmark.png
+│   └── model_benchmark_delta.png
+├── preprocessing/            # Data preprocessing
+│   ├── preprocessing.py      # Main pipeline
+│   └── feature_eng.py        # Feature engineering helpers
+├── predict/                  # Prediction utilities
 │   └── predict_model.py
-├── train/                # Model training scripts
-│   ├── train_xgboost.py
-│   ├── train_catboost.py
-│   ├── train_lightgbm.py
-│   └── train_gradient_boosting.py
-└── requirements.txt       # Python dependencies
+├── tests/                    # Checks and diagnostic plots
+│   ├── plot_actual_vs_pred.py
+│   └── test_random_predictions.py
+├── train/                    # Model training/evaluation
+│   ├── train_*.py            # Model-specific trainers
+│   ├── benchmark_models.py   # Compare models
+│   └── plot_model_metrics.py # Plot metric deltas
+├── README.md                 # Project overview
+└── requirements.txt          # Python dependencies
 ```
 
 ## Generating the Heatmap
