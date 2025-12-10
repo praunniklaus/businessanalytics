@@ -117,23 +117,42 @@ This creates `heatmap/property_map.html` which can be opened directly in a brows
 
 ## Documentation 
 
-- Raw intake (`data/raw_data.csv`):
-  - Full scrape with many unused columns (URLs, long descriptions, profile pics).
-  - Mixed types, messy categories, missing values, and outliers (prices, nights, baths/beds).
-  - Licensing fields inconsistent; amenities/reviews arrive as long strings.
-- Preprocessing (`data/preprocessed.csv`):
-  - Drop non-signal columns, standardize neighborhood and room/property types.
-  - Parse/clean numeric fields (price, beds, baths, min/max nights); filter or cap implausible values.
-  - Handle missing values with sensible fills/flags; keep scrape dates to manage recency.
-- Feature engineering (`data/data.csv`, `data/feature_averages.json`):
-  - Encode categorical fields; explode amenities into indicators.
-  - Create ratios and interactions (price per night, beds per guest, etc.).
-  - Add neighborhood aggregates (e.g., average price per sqm) for local market context.
-- Modeling (`models/*.joblib`, `models/model_metrics.json`, plots):
-  - Train and compare multiple regressors (tree ensembles, linear baselines, tuned variants).
-  - Fit a similarity KNN model for nearest-neighbor lookups.
-  - Track metrics and benchmark plots to select and monitor best models.
-- Serving and visualization:
-  - FastAPI (`api/`) exposes prediction endpoints using the trained artifacts.
-  - Heatmap (`heatmap/`) renders spatial supply/price patterns.
-  - Next.js frontend (`frontend/`) provides UI for predictions and visual insights.
+### Airbnb Price Prediction Berlin - Project Documentation
+
+#### Introduction and Problem Statement
+How can a Berlin Airbnb host price a listing optimally? New hosts lack market context; experienced hosts often rely on gut feeling and risk empty nights or underpricing. Berlin’s ~20k+ active listings make pricing competitive, with strong dependence on location, amenities, reviews, property type, and host experience. Our goal is a data-driven tool so hosts can price confidently.
+
+#### Our Approach
+We framed pricing as supervised regression: listing features → nightly price. We built a full application: a FastAPI backend serving predictions and a Next.js frontend with an interactive map so users can input details and see comparable listings.
+
+#### Data Processing (from raw to cleaned)
+- Raw intake (`data/raw_data.csv`): full scrape with many unused columns (URLs, long descriptions, profile pics), mixed types, messy categories, missing values, outliers (prices, nights, baths/beds), inconsistent licensing, and amenities/reviews as long strings.
+- Preprocessing (`data/preprocessed.csv`): drop non-signal columns; standardize neighborhoods and room/property types; parse and clean numeric fields (price, beds, baths, min/max nights); filter/cap implausible values; handle missing values with sensible fills/flags; keep scrape dates for recency.
+- Result: ~9.2k cleaned listings (from ~27k raw, 79 columns) focused on signals: property traits, location, host info, reviews, amenities.
+
+#### Feature Engineering
+- Outputs: `data/data.csv` and neighborhood aggregates `data/feature_averages.json`.
+- Steps: encode categoricals; explode amenities into indicators; create ratios/interactions (price per night, beds/baths per guest); add neighborhood aggregates (e.g., average price per sqm); compute domain signals like distances to key landmarks (Brandenburg Gate, Alexanderplatz); quality proxies (amenity count, per-person ratios, professional-host flag).
+- Final: 77 engineered features mixing numeric, encoded categorical, and aggregate signals.
+
+#### Modeling
+- Trained/compared: linear baselines (Ridge, Lasso), trees/ensembles (Decision Tree, Random Forest, sklearn Gradient Boosting, XGBoost, LightGBM, CatBoost), MLP, stacking ensemble, plus a similarity KNN model for nearest-neighbor lookups.
+- Artifacts: `models/*.joblib`, `models/model_metrics.json`, benchmark plots.
+
+#### Why CatBoost in Production
+- Best-performing in benchmarks; strong with categorical features; less overfitting; fast inference for the web app.
+- Tuned via RandomizedSearchCV (5-fold CV) over iterations, learning rate, depth, regularization.
+
+#### Model Evaluation
+- Held-out 20% test set.
+- Ranking: CatBoost tuned > sklearn Gradient Boosting ≈ Stacking Ensemble; XGBoost/LightGBM close; linear models as baselines; MLP and plain tree weaker.
+- Key drivers: room type, capacity, location (distance to center/neighborhood), review volume, bedrooms/beds.
+
+#### Serving and Visualization (API, heatmap, frontend)
+- Backend: FastAPI (`api/`) loads trained models, validates Berlin locations, exposes prediction endpoints, and serves map data.
+- Heatmap: `heatmap/` builds spatial supply/price patterns (`property_map.html`).
+- Frontend: Next.js (`frontend/`) with a four-step prediction form (location, property details, amenities, reviews) and interactive map showing predicted listing alongside real comps, color-coded by price tiers; includes address geocoding for ease of use.
+
+#### Limitations and Future Work
+- Current: static training snapshot; no seasonality/demand modeling; Berlin-only scope.
+- Next: add time-series features, occupancy for revenue prediction, multi-city support, confidence intervals.
