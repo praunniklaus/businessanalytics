@@ -114,3 +114,26 @@ python heatmap/create_map.py
 ```
 
 This creates `heatmap/property_map.html` which can be opened directly in a browser.
+
+## Documentation 
+
+- Raw intake (`data/raw_data.csv`):
+  - Full scrape with many unused columns (URLs, long descriptions, profile pics).
+  - Mixed types, messy categories, missing values, and outliers (prices, nights, baths/beds).
+  - Licensing fields inconsistent; amenities/reviews arrive as long strings.
+- Preprocessing (`data/preprocessed.csv`):
+  - Drop non-signal columns, standardize neighborhood and room/property types.
+  - Parse/clean numeric fields (price, beds, baths, min/max nights); filter or cap implausible values.
+  - Handle missing values with sensible fills/flags; keep scrape dates to manage recency.
+- Feature engineering (`data/data.csv`, `data/feature_averages.json`):
+  - Encode categorical fields; explode amenities into indicators.
+  - Create ratios and interactions (price per night, beds per guest, etc.).
+  - Add neighborhood aggregates (e.g., average price per sqm) for local market context.
+- Modeling (`models/*.joblib`, `models/model_metrics.json`, plots):
+  - Train and compare multiple regressors (tree ensembles, linear baselines, tuned variants).
+  - Fit a similarity KNN model for nearest-neighbor lookups.
+  - Track metrics and benchmark plots to select and monitor best models.
+- Serving and visualization:
+  - FastAPI (`api/`) exposes prediction endpoints using the trained artifacts.
+  - Heatmap (`heatmap/`) renders spatial supply/price patterns.
+  - Next.js frontend (`frontend/`) provides UI for predictions and visual insights.
